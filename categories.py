@@ -1,96 +1,96 @@
 """
-Define aquí tus categorías de gastos e ingresos,
-y las cuentas/cajas de activo que usas.
+Define your expense and income categories here,
+and the asset accounts/wallets you use.
 
-Personaliza estas listas según tu sistema en Google Sheets.
+Customize these lists to match your Google Sheets setup.
 """
 
-# ─── CATEGORÍAS DE GASTO ──────────────────────────────────────────────────────
+# ─── EXPENSE CATEGORIES ───────────────────────────────────────────────────────
 EXPENSE_CATEGORIES = [
-    # Hogar
-    "Alquiler",
-    "Hipoteca",
-    "Suministros (luz, agua, gas)",
-    "Internet y móvil",
-    "Hogar y limpieza",
+    # Housing
+    "Rent",
+    "Mortgage",
+    "Utilities (electricity, water, gas)",
+    "Internet and mobile",
+    "Home and cleaning",
 
-    # Alimentación
-    "Supermercado",
-    "Restaurantes y bares",
+    # Food
+    "Groceries",
+    "Restaurants and bars",
     "Delivery (Glovo, Uber Eats)",
 
-    # Transporte
-    "Transporte público",
-    "Gasolina",
+    # Transport
+    "Public transport",
+    "Gas / Fuel",
     "Taxi / Cabify / Uber",
     "Parking",
 
-    # Salud
-    "Farmacia",
-    "Médico / Seguro médico",
-    "Gimnasio",
+    # Health
+    "Pharmacy",
+    "Doctor / Health insurance",
+    "Gym",
 
-    # Ocio y cultura
-    "Ocio y entretenimiento",
+    # Leisure and culture
+    "Leisure and entertainment",
     "Streaming (Netflix, Spotify)",
-    "Viajes y vacaciones",
-    "Ropa y moda",
+    "Travel and holidays",
+    "Clothing and fashion",
 
-    # Finanzas
-    "Ahorro / Inversión",
-    "Seguros",
-    "Impuestos y tasas",
-    "Comisiones bancarias",
+    # Finance
+    "Savings / Investment",
+    "Insurance",
+    "Taxes and fees",
+    "Bank charges",
 
     # Social
-    "Regalos",
-    "Transferencias a personas",
+    "Gifts",
+    "Transfers to people",
 
-    # Otros
-    "Suscripciones",
-    "Educación y formación",
-    "Mascotas",
-    "Sin categorizar",
+    # Other
+    "Subscriptions",
+    "Education and training",
+    "Pets",
+    "Uncategorized",
 ]
 
-# ─── CATEGORÍAS DE INGRESO ────────────────────────────────────────────────────
+# ─── INCOME CATEGORIES ────────────────────────────────────────────────────────
 INCOME_CATEGORIES = [
-    "Nómina / Salario",
-    "Freelance / Factura",
-    "Transferencia recibida",
-    "Devolución",
-    "Reembolso de seguro",
-    "Ingreso extraordinario",
+    "Salary / Payroll",
+    "Freelance / Invoice",
+    "Transfer received",
+    "Refund",
+    "Insurance reimbursement",
+    "Extraordinary income",
 ]
 
-# ─── CUENTAS / CAJAS DE ACTIVO ────────────────────────────────────────────────
-# Estas son las "cajas" de donde sale o entra el dinero en tu sistema
+# ─── ASSET ACCOUNTS ───────────────────────────────────────────────────────────
+# These are the "wallets" money moves in and out of in your system
 ASSET_ACCOUNTS = [
-    "Actual",       # Tu cuenta principal
+    "Actual",       # Your main account
     "Revolut",
-    "Efectivo",
-    "Ahorro",
-    # Añade aquí tus cuentas
+    "Cash",
+    "Savings",
+    # Add your accounts here
 ]
 
-# ─── UNIÓN DE TODAS LAS CATEGORÍAS ───────────────────────────────────────────
+# ─── ALL CATEGORIES ───────────────────────────────────────────────────────────
 CATEGORIES = EXPENSE_CATEGORIES + INCOME_CATEGORIES
 
 
-# ─── PALABRAS CLAVE PARA PRE-CLASIFICACIÓN RÁPIDA ────────────────────────────
-# Ayuda a la IA y reduce llamadas a la API en casos obvios.
-# Formato: "texto_en_descripcion_lowercase" -> "Categoría"
+# ─── KEYWORD HINTS FOR FAST PRE-CLASSIFICATION ────────────────────────────────
+# Helps the AI and reduces API calls for obvious cases.
+# Format: "lowercase_text_in_description" -> "Category"
 KEYWORD_HINTS = {
-    # Supermercados
-    "carrefour": "Supermercado",
-    "mercadona": "Supermercado",
-    "lidl": "Supermercado",
-    "aldi": "Supermercado",
-    "dia ": "Supermercado",
-    "eroski": "Supermercado",
-    "alcampo": "Supermercado",
-    "hipercor": "Supermercado",
-    "el corte ingles": "Supermercado",
+    # Supermarkets
+    "carrefour": "Groceries",
+    "mercadona": "Groceries",
+    "lidl": "Groceries",
+    "aldi": "Groceries",
+    "dia ": "Groceries",
+    "eroski": "Groceries",
+    "alcampo": "Groceries",
+    "hipercor": "Groceries",
+    "el corte ingles": "Groceries",
 
     # Delivery
     "glovo": "Delivery (Glovo, Uber Eats)",
@@ -98,14 +98,14 @@ KEYWORD_HINTS = {
     "just eat": "Delivery (Glovo, Uber Eats)",
     "deliveroo": "Delivery (Glovo, Uber Eats)",
 
-    # Transporte
+    # Transport
     "cabify": "Taxi / Cabify / Uber",
     "uber": "Taxi / Cabify / Uber",
     "bolt": "Taxi / Cabify / Uber",
-    "renfe": "Transporte público",
-    "metro": "Transporte público",
-    "emt ": "Transporte público",
-    "tmc ": "Transporte público",
+    "renfe": "Public transport",
+    "metro": "Public transport",
+    "emt ": "Public transport",
+    "tmc ": "Public transport",
 
     # Streaming
     "netflix": "Streaming (Netflix, Spotify)",
@@ -113,24 +113,24 @@ KEYWORD_HINTS = {
     "hbo": "Streaming (Netflix, Spotify)",
     "disney": "Streaming (Netflix, Spotify)",
     "amazon prime": "Streaming (Netflix, Spotify)",
-    "apple.com/bill": "Suscripciones",
+    "apple.com/bill": "Subscriptions",
 
-    # Bizum / transferencias
-    "bizum payment to": "Transferencias a personas",
-    "bizum received from": "Transferencia recibida",
+    # Bizum / transfers
+    "bizum payment to": "Transfers to people",
+    "bizum received from": "Transfer received",
 
-    # Nómina
-    "nomina": "Nómina / Salario",
-    "nómina": "Nómina / Salario",
-    "salario": "Nómina / Salario",
+    # Salary
+    "nomina": "Salary / Payroll",
+    "nómina": "Salary / Payroll",
+    "salario": "Salary / Payroll",
 
-    # Farmacia
-    "farmacia": "Farmacia",
-    "pharmacy": "Farmacia",
+    # Pharmacy
+    "farmacia": "Pharmacy",
+    "pharmacy": "Pharmacy",
 
-    # Gasolina
-    "repsol": "Gasolina",
-    "bp ": "Gasolina",
-    "cepsa": "Gasolina",
-    "galp": "Gasolina",
+    # Gas / Fuel
+    "repsol": "Gas / Fuel",
+    "bp ": "Gas / Fuel",
+    "cepsa": "Gas / Fuel",
+    "galp": "Gas / Fuel",
 }

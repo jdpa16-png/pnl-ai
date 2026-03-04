@@ -1,8 +1,8 @@
 """
-Clasificador de gastos usando Claude API.
-- Usa historial previo para aprender de tus categorizaciones
-- Aplica keywords para casos obvios (sin gastar API)
-- Pregunta interactivamente cuando la confianza es baja
+Expense classifier using Claude API.
+- Uses previous history to learn from your categorizations
+- Applies keywords for obvious cases (no API cost)
+- Asks interactively when confidence is low
 """
 
 import json
@@ -14,129 +14,129 @@ import anthropic
 from categories import CATEGORIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, KEYWORD_HINTS
 
 
-# Umbral de confianza para preguntar al usuario (0-1)
+# Confidence threshold for asking the user (0-1)
 CONFIDENCE_THRESHOLD = 0.75
 
 
 class ExpenseClassifier:
-    def __init__(self, historial_path: str = "data/historial.json", interactive: bool = True):
+    def __init__(self, history_path: str = "data/history.json", interactive: bool = True):
         self.interactive = interactive
-        self.historial_path = Path(historial_path)
-        self.historial = self._load_historial()
+        self.history_path = Path(history_path)
+        self.history = self._load_history()
         self.client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
     # ──────────────────────────────────────────────────────────────────────────
-    # CLASIFICACIÓN PRINCIPAL
+    # MAIN CLASSIFICATION
     # ──────────────────────────────────────────────────────────────────────────
 
-    def classify_batch(self, movimientos: list[dict]) -> list[dict]:
-        """Clasifica una lista de movimientos."""
-        resultados = []
-        total = len(movimientos)
+    def classify_batch(self, transactions: list[dict]) -> list[dict]:
+        """Classifies a list of transactions."""
+        results = []
+        total = len(transactions)
 
-        for i, mov in enumerate(movimientos):
-            print(f"[{i+1}/{total}] {mov['fecha']} | {mov['descripcion'][:45]:<45} | {mov['importe']:>9.2f} €", end="  ")
+        for i, tx in enumerate(transactions):
+            print(f"[{i+1}/{total}] {tx['date']} | {tx['description'][:45]:<45} | {tx['amount']:>9.2f} €", end="  ")
 
-            resultado = self.classify_one(mov)
-            resultados.append({**mov, **resultado})
+            result = self.classify_one(tx)
+            results.append({**tx, **result})
 
-            confianza_emoji = "✅" if resultado["confianza"] == "alta" else "🟡" if resultado["confianza"] == "media" else "❓"
-            print(f"{confianza_emoji} {resultado['categoria']}")
+            confidence_emoji = "✅" if result["confidence"] == "high" else "🟡" if result["confidence"] == "medium" else "❓"
+            print(f"{confidence_emoji} {result['category']}")
 
-        # Guardar historial actualizado
-        self._save_historial()
-        return resultados
+        # Save updated history
+        self._save_history()
+        return results
 
-    def classify_one(self, mov: dict) -> dict:
+    def classify_one(self, tx: dict) -> dict:
         """
-        Clasifica un movimiento individual.
-        Estrategia:
-        1. Buscar en historial exacto
-        2. Buscar por keyword
-        3. Preguntar a Claude API
-        4. Si confianza baja y modo interactivo → preguntar al usuario
+        Classifies a single transaction.
+        Strategy:
+        1. Exact history lookup
+        2. Keyword match
+        3. Claude API
+        4. If low confidence and interactive mode → ask user
         """
-        descripcion = mov["descripcion"]
-        importe = mov["importe"]
+        description = tx["description"]
+        amount = tx["amount"]
 
-        # 1. Historial exacto
-        hist_result = self._lookup_historial(descripcion)
+        # 1. Exact history match
+        hist_result = self._lookup_history(description)
         if hist_result:
             return {
-                "categoria": hist_result["categoria"],
-                "cuenta_origen": hist_result.get("cuenta_origen", "Actual"),
-                "confianza": "alta",
-                "fuente": "historial",
+                "category": hist_result["category"],
+                "source_account": hist_result.get("source_account", "Actual"),
+                "confidence": "high",
+                "source": "history",
             }
 
-        # 2. Keywords rápidas
-        keyword_cat = self._keyword_match(descripcion)
+        # 2. Quick keyword match
+        keyword_cat = self._keyword_match(description)
         if keyword_cat:
             result = {
-                "categoria": keyword_cat,
-                "cuenta_origen": "Actual",
-                "confianza": "alta",
-                "fuente": "keyword",
+                "category": keyword_cat,
+                "source_account": "Actual",
+                "confidence": "high",
+                "source": "keyword",
             }
-            self._add_to_historial(descripcion, result)
+            self._add_to_history(description, result)
             return result
 
         # 3. Claude API
-        ai_result = self._classify_with_ai(mov)
+        ai_result = self._classify_with_ai(tx)
 
-        # 4. Si confianza baja y modo interactivo → preguntar
-        if self.interactive and ai_result["confianza"] in ("baja", "media"):
-            ai_result = self._ask_user(mov, ai_result)
+        # 4. If low confidence and interactive → ask user
+        if self.interactive and ai_result["confidence"] in ("low", "medium"):
+            ai_result = self._ask_user(tx, ai_result)
 
-        self._add_to_historial(descripcion, ai_result)
+        self._add_to_history(description, ai_result)
         return ai_result
 
     # ──────────────────────────────────────────────────────────────────────────
     # CLAUDE API
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _classify_with_ai(self, mov: dict) -> dict:
-        """Llama a Claude para categorizar el movimiento."""
-        
-        categorias_str = "\n".join(f"- {c}" for c in CATEGORIES)
-        cuentas_str = "Actual, Revolut, Efectivo, Ahorro"
-        
-        # Contexto del historial reciente para que aprenda tu patrón
-        historial_ejemplos = self._get_historial_examples(10)
-        historial_str = ""
-        if historial_ejemplos:
-            historial_str = "\nEjemplos de categorizaciones previas del usuario:\n"
-            for h in historial_ejemplos:
-                historial_str += f"  '{h['descripcion']}' → {h['categoria']}\n"
+    def _classify_with_ai(self, tx: dict) -> dict:
+        """Calls Claude to categorize the transaction."""
 
-        prompt = f"""Eres un asistente que categoriza movimientos bancarios personales en español.
+        categories_str = "\n".join(f"- {c}" for c in CATEGORIES)
+        accounts_str = "Actual, Revolut, Cash, Savings"
 
-MOVIMIENTO A CATEGORIZAR:
-- Descripción: {mov['descripcion']}
-- Importe: {mov['importe']} {mov.get('divisa', 'EUR')}
-- Tipo operación: {mov.get('tipo', 'desconocido')}
-- Fecha: {mov.get('fecha', '')}
+        # Recent history context so Claude learns your patterns
+        history_examples = self._get_history_examples(10)
+        history_str = ""
+        if history_examples:
+            history_str = "\nExamples of previous categorizations:\n"
+            for h in history_examples:
+                history_str += f"  '{h['description']}' → {h['category']}\n"
 
-CATEGORÍAS DISPONIBLES:
-{categorias_str}
+        prompt = f"""You are an assistant that categorizes personal bank transactions.
 
-CUENTAS DE ACTIVO DISPONIBLES:
-{cuentas_str}
-{historial_str}
+TRANSACTION TO CATEGORIZE:
+- Description: {tx['description']}
+- Amount: {tx['amount']} {tx.get('currency', 'EUR')}
+- Operation type: {tx.get('type', 'unknown')}
+- Date: {tx.get('date', '')}
 
-Responde ÚNICAMENTE con un JSON válido (sin markdown) con este formato exacto:
+AVAILABLE CATEGORIES:
+{categories_str}
+
+AVAILABLE ASSET ACCOUNTS:
+{accounts_str}
+{history_str}
+
+Reply ONLY with valid JSON (no markdown) in this exact format:
 {{
-  "categoria": "nombre exacto de la categoría",
-  "cuenta_origen": "nombre de la cuenta",
-  "confianza": "alta|media|baja",
-  "razon": "explicación breve en una frase"
+  "category": "exact category name",
+  "source_account": "account name",
+  "confidence": "high|medium|low",
+  "reason": "brief one-sentence explanation"
 }}
 
-Reglas:
-- "confianza" es "alta" si estás muy seguro, "media" si hay dudas, "baja" si es muy ambiguo
-- Si el importe es positivo probablemente es un ingreso
-- Si el importe es negativo probablemente es un gasto
-- "cuenta_origen" es la cuenta de donde sale el dinero (normalmente "Actual")
+Rules:
+- "confidence" is "high" if very certain, "medium" if unsure, "low" if very ambiguous
+- A positive amount is likely income
+- A negative amount is likely an expense
+- "source_account" is the account the money comes from (usually "Actual")
 """
 
         try:
@@ -145,122 +145,122 @@ Reglas:
                 max_tokens=256,
                 messages=[{"role": "user", "content": prompt}]
             )
-            
+
             response_text = message.content[0].text.strip()
-            # Limpiar posibles backticks
+            # Strip possible backticks
             response_text = response_text.replace("```json", "").replace("```", "").strip()
-            
+
             data = json.loads(response_text)
-            
-            # Validar que la categoría existe
-            if data.get("categoria") not in CATEGORIES:
-                data["categoria"] = "Sin categorizar"
-                data["confianza"] = "baja"
-            
+
+            # Validate category exists
+            if data.get("category") not in CATEGORIES:
+                data["category"] = "Uncategorized"
+                data["confidence"] = "low"
+
             return {
-                "categoria": data.get("categoria", "Sin categorizar"),
-                "cuenta_origen": data.get("cuenta_origen", "Actual"),
-                "confianza": data.get("confianza", "media"),
-                "razon": data.get("razon", ""),
-                "fuente": "ai",
+                "category": data.get("category", "Uncategorized"),
+                "source_account": data.get("source_account", "Actual"),
+                "confidence": data.get("confidence", "medium"),
+                "reason": data.get("reason", ""),
+                "source": "ai",
             }
 
         except Exception as e:
-            print(f"\n⚠️  Error en API: {e}")
+            print(f"\n⚠️  API error: {e}")
             return {
-                "categoria": "Sin categorizar",
-                "cuenta_origen": "Actual",
-                "confianza": "baja",
-                "fuente": "error",
+                "category": "Uncategorized",
+                "source_account": "Actual",
+                "confidence": "low",
+                "source": "error",
             }
 
     # ──────────────────────────────────────────────────────────────────────────
-    # INTERACCIÓN CON USUARIO
+    # USER INTERACTION
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _ask_user(self, mov: dict, ai_result: dict) -> dict:
-        """Pregunta al usuario cuando la IA no está segura."""
-        print(f"\n  ┌─ 🤔 Duda en: '{mov['descripcion']}' ({mov['importe']} €)")
-        print(f"  │  IA sugiere: '{ai_result['categoria']}' (confianza: {ai_result['confianza']})")
-        if ai_result.get("razon"):
-            print(f"  │  Razón: {ai_result['razon']}")
-        print(f"  └─ Opciones:")
-        
-        # Mostrar categorías numeradas
+    def _ask_user(self, tx: dict, ai_result: dict) -> dict:
+        """Asks the user when the AI is uncertain."""
+        print(f"\n  ┌─ 🤔 Unsure about: '{tx['description']}' ({tx['amount']} €)")
+        print(f"  │  AI suggests: '{ai_result['category']}' (confidence: {ai_result['confidence']})")
+        if ai_result.get("reason"):
+            print(f"  │  Reason: {ai_result['reason']}")
+        print(f"  └─ Options:")
+
+        # Show numbered categories
         for i, cat in enumerate(CATEGORIES, 1):
-            marker = "👉" if cat == ai_result["categoria"] else "  "
+            marker = "👉" if cat == ai_result["category"] else "  "
             print(f"     {marker} {i:2}. {cat}")
-        
-        print(f"\n  Pulsa ENTER para aceptar '{ai_result['categoria']}'")
-        print(f"  O escribe el número de categoría: ", end="")
-        
+
+        print(f"\n  Press ENTER to accept '{ai_result['category']}'")
+        print(f"  Or type the category number: ", end="")
+
         try:
             user_input = input().strip()
-            
+
             if not user_input:
-                # Aceptar sugerencia de IA
-                ai_result["confianza"] = "alta"  # El usuario validó
+                # Accept AI suggestion
+                ai_result["confidence"] = "high"  # User validated
                 return ai_result
-            
+
             idx = int(user_input) - 1
             if 0 <= idx < len(CATEGORIES):
-                ai_result["categoria"] = CATEGORIES[idx]
-                ai_result["confianza"] = "alta"
-                ai_result["fuente"] = "usuario"
+                ai_result["category"] = CATEGORIES[idx]
+                ai_result["confidence"] = "high"
+                ai_result["source"] = "user"
             else:
-                print("  ⚠️  Número inválido, usando sugerencia de IA")
-                
+                print("  ⚠️  Invalid number, using AI suggestion")
+
         except (ValueError, EOFError):
-            pass  # Mantener resultado de IA
-        
+            pass  # Keep AI result
+
         return ai_result
 
     # ──────────────────────────────────────────────────────────────────────────
-    # HISTORIAL / MEMORIA
+    # HISTORY / MEMORY
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _load_historial(self) -> dict:
-        """Carga el historial de categorizaciones previas."""
-        if self.historial_path.exists():
-            with open(self.historial_path, "r", encoding="utf-8") as f:
+    def _load_history(self) -> dict:
+        """Loads the previous categorizations history."""
+        if self.history_path.exists():
+            with open(self.history_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         return {}
 
-    def _save_historial(self):
-        """Guarda el historial actualizado."""
-        self.historial_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.historial_path, "w", encoding="utf-8") as f:
-            json.dump(self.historial, f, ensure_ascii=False, indent=2)
+    def _save_history(self):
+        """Saves the updated history."""
+        self.history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.history_path, "w", encoding="utf-8") as f:
+            json.dump(self.history, f, ensure_ascii=False, indent=2)
 
-    def _lookup_historial(self, descripcion: str) -> dict | None:
-        """Busca una descripción exacta en el historial."""
-        key = descripcion.lower().strip()
-        return self.historial.get(key)
+    def _lookup_history(self, description: str) -> dict | None:
+        """Looks up an exact description in the history."""
+        key = description.lower().strip()
+        return self.history.get(key)
 
-    def _add_to_historial(self, descripcion: str, result: dict):
-        """Añade una categorización al historial."""
-        # Solo guardar si confianza alta (no queremos aprender errores)
-        if result.get("confianza") == "alta":
-            key = descripcion.lower().strip()
-            self.historial[key] = {
-                "descripcion": descripcion,
-                "categoria": result["categoria"],
-                "cuenta_origen": result.get("cuenta_origen", "Actual"),
+    def _add_to_history(self, description: str, result: dict):
+        """Adds a categorization to the history."""
+        # Only save if high confidence (don't learn from mistakes)
+        if result.get("confidence") == "high":
+            key = description.lower().strip()
+            self.history[key] = {
+                "description": description,
+                "category": result["category"],
+                "source_account": result.get("source_account", "Actual"),
             }
 
-    def _get_historial_examples(self, n: int = 10) -> list[dict]:
-        """Devuelve N ejemplos del historial para el prompt."""
-        items = list(self.historial.values())
+    def _get_history_examples(self, n: int = 10) -> list[dict]:
+        """Returns N examples from the history for the prompt."""
+        items = list(self.history.values())
         return items[-n:] if len(items) > n else items
 
     # ──────────────────────────────────────────────────────────────────────────
     # KEYWORDS
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _keyword_match(self, descripcion: str) -> str | None:
-        """Busca keywords en la descripción para categorización rápida."""
-        desc_lower = descripcion.lower()
-        for keyword, categoria in KEYWORD_HINTS.items():
+    def _keyword_match(self, description: str) -> str | None:
+        """Looks for keywords in the description for fast categorization."""
+        desc_lower = description.lower()
+        for keyword, category in KEYWORD_HINTS.items():
             if keyword in desc_lower:
-                return categoria
+                return category
         return None

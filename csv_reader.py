@@ -1,8 +1,8 @@
 """
-Parser del CSV exportado del banco.
-Soporta el formato de Revolut/Actual con columnas:
-Tipo, Producto, Fecha de inicio, Fecha de finalización,
-Descripción, Importe, Comisión, Divisa, State, Saldo
+Bank CSV export parser.
+Supports the Revolut/Actual format with columns:
+Type, Product, Started Date, Completed Date,
+Description, Amount, Fee, Currency, State, Balance
 """
 
 import csv
@@ -12,107 +12,107 @@ from datetime import datetime
 
 def read_bank_csv(filepath: Path) -> list[dict]:
     """
-    Lee el CSV del banco y devuelve lista de movimientos normalizados.
-    
-    Returns:
-        Lista de dicts con claves: fecha, descripcion, importe,
-        divisa, tipo, saldo, estado
-    """
-    movimientos = []
+    Reads the bank CSV and returns a list of normalized transactions.
 
-    # Intentar detectar el delimitador automáticamente
+    Returns:
+        List of dicts with keys: date, description, amount,
+        currency, type, balance, state
+    """
+    transactions = []
+
+    # Auto-detect delimiter
     with open(filepath, "r", encoding="utf-8-sig") as f:
         sample = f.read(2048)
-    
+
     delimiter = ";" if sample.count(";") > sample.count(",") else ","
 
     with open(filepath, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f, delimiter=delimiter)
-        
+
         for i, row in enumerate(reader):
             try:
-                mov = parse_row(row, i)
-                if mov:
-                    movimientos.append(mov)
+                tx = parse_row(row, i)
+                if tx:
+                    transactions.append(tx)
             except Exception as e:
-                print(f"⚠️  Fila {i+2} ignorada: {e} — {dict(row)}")
+                print(f"⚠️  Row {i+2} skipped: {e} — {dict(row)}")
 
-    # Ordenar por fecha descendente (más recientes primero)
-    movimientos.sort(key=lambda x: x["fecha"], reverse=True)
-    return movimientos
+    # Sort by date descending (most recent first)
+    transactions.sort(key=lambda x: x["date"], reverse=True)
+    return transactions
 
 
 def parse_row(row: dict, index: int) -> dict | None:
-    """Parsea una fila del CSV y devuelve dict normalizado."""
-    
-    # Normalizar nombres de columnas (quitar espacios, lowercase)
+    """Parses a CSV row and returns a normalized dict."""
+
+    # Normalize column names (strip spaces, lowercase)
     row = {k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()}
 
-    # Descripción
-    descripcion = (
+    # Description
+    description = (
         row.get("Descripción") or
         row.get("Descripcion") or
         row.get("Description") or
         row.get("Concepto") or
         ""
     ).strip()
-    
-    if not descripcion:
-        return None  # Filas vacías o cabeceras duplicadas
 
-    # Importe
-    importe_raw = (
+    if not description:
+        return None  # Empty rows or duplicate headers
+
+    # Amount
+    amount_raw = (
         row.get("Importe") or
         row.get("Amount") or
         row.get("Monto") or
         "0"
     )
     try:
-        importe = float(str(importe_raw).replace(",", ".").replace(" ", ""))
+        amount = float(str(amount_raw).replace(",", ".").replace(" ", ""))
     except ValueError:
-        print(f"⚠️  Importe inválido: '{importe_raw}' en '{descripcion}'")
-        importe = 0.0
+        print(f"⚠️  Invalid amount: '{amount_raw}' for '{description}'")
+        amount = 0.0
 
-    # Fecha
-    fecha_raw = (
+    # Date
+    date_raw = (
         row.get("Fecha de inicio") or
         row.get("Fecha") or
         row.get("Date") or
         row.get("Started Date") or
         ""
     )
-    fecha = parse_date(fecha_raw)
+    date = parse_date(date_raw)
 
-    # Divisa
-    divisa = row.get("Divisa") or row.get("Currency") or "EUR"
+    # Currency
+    currency = row.get("Divisa") or row.get("Currency") or "EUR"
 
-    # Tipo de operación
-    tipo = row.get("Tipo") or row.get("Type") or ""
+    # Operation type
+    tx_type = row.get("Tipo") or row.get("Type") or ""
 
-    # Estado
-    estado = row.get("State") or row.get("Status") or "COMPLETADO"
-    
-    # Saltar transacciones pendientes/revertidas si se desea
-    if estado.upper() in ("REVERTED", "DECLINED", "FAILED"):
+    # State
+    state = row.get("State") or row.get("Status") or "COMPLETED"
+
+    # Skip reverted/declined/failed transactions
+    if state.upper() in ("REVERTED", "DECLINED", "FAILED"):
         return None
 
     return {
         "id": index,
-        "fecha": fecha,
-        "descripcion": descripcion,
-        "importe": importe,
-        "divisa": divisa,
-        "tipo": tipo,
-        "estado": estado,
-        "saldo": float(str(row.get("Saldo", "0") or row.get("Balance", "0")).replace(",", ".") or 0),
+        "date": date,
+        "description": description,
+        "amount": amount,
+        "currency": currency,
+        "type": tx_type,
+        "state": state,
+        "balance": float(str(row.get("Saldo", "0") or row.get("Balance", "0")).replace(",", ".") or 0),
     }
 
 
-def parse_date(fecha_raw: str) -> str:
-    """Parsea fecha en varios formatos, devuelve YYYY-MM-DD."""
-    if not fecha_raw:
+def parse_date(date_raw: str) -> str:
+    """Parses a date in various formats, returns YYYY-MM-DD."""
+    if not date_raw:
         return ""
-    
+
     formats = [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d",
@@ -121,13 +121,13 @@ def parse_date(fecha_raw: str) -> str:
         "%m/%d/%Y",
         "%Y-%m-%dT%H:%M:%S",
     ]
-    
+
     for fmt in formats:
         try:
-            dt = datetime.strptime(fecha_raw.strip(), fmt)
+            dt = datetime.strptime(date_raw.strip(), fmt)
             return dt.strftime("%Y-%m-%d")
         except ValueError:
             continue
-    
-    # Si no parsea, devolver tal cual
-    return fecha_raw.strip()
+
+    # If no format matches, return as-is
+    return date_raw.strip()

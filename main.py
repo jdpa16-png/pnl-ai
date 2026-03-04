@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Categorizador de gastos con IA - Fase 1
-Lee un CSV bancario, categoriza automáticamente y exporta resultado.
+AI Expense Categorizer - Phase 1
+Reads a bank CSV, categorizes automatically, and exports the result.
 """
 
 import argparse
@@ -14,97 +14,97 @@ from categories import CATEGORIES, ASSET_ACCOUNTS
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Categorizador de gastos con IA")
-    parser.add_argument("csv_file", help="Ruta al CSV exportado del banco")
+    parser = argparse.ArgumentParser(description="AI Expense Categorizer")
+    parser.add_argument("csv_file", help="Path to the bank-exported CSV")
     parser.add_argument(
-        "--output", "-o", default="movimientos_categorizados.csv",
-        help="Archivo de salida (default: movimientos_categorizados.csv)"
+        "--output", "-o", default="categorized_transactions.csv",
+        help="Output file (default: categorized_transactions.csv)"
     )
     parser.add_argument(
-        "--historial", default="data/historial.json",
-        help="Ruta al historial de categorizaciones previas"
+        "--history", default="data/history.json",
+        help="Path to previous categorizations history"
     )
     parser.add_argument(
         "--auto", action="store_true",
-        help="Modo automático: no preguntar, usar mejor estimación siempre"
+        help="Automatic mode: never ask, always use best estimate"
     )
     args = parser.parse_args()
 
     csv_path = Path(args.csv_file)
     if not csv_path.exists():
-        print(f"❌ Error: No se encuentra el archivo {csv_path}")
+        print(f"❌ Error: File not found: {csv_path}")
         sys.exit(1)
 
-    print(f"\n💰 Categorizador de Gastos IA")
+    print(f"\n💰 AI Expense Categorizer")
     print(f"{'='*50}")
-    print(f"📂 Leyendo: {csv_path.name}")
+    print(f"📂 Reading: {csv_path.name}")
 
-    # 1. Leer CSV
-    movimientos = read_bank_csv(csv_path)
-    print(f"✅ {len(movimientos)} movimientos cargados\n")
+    # 1. Read CSV
+    transactions = read_bank_csv(csv_path)
+    print(f"✅ {len(transactions)} transactions loaded\n")
 
-    # 2. Clasificar
+    # 2. Classify
     classifier = ExpenseClassifier(
-        historial_path=args.historial,
+        history_path=args.history,
         interactive=not args.auto
     )
-    
-    resultados = classifier.classify_batch(movimientos)
 
-    # 3. Exportar
+    results = classifier.classify_batch(transactions)
+
+    # 3. Export
     output_path = Path(args.output)
-    export_results(resultados, output_path)
+    export_results(results, output_path)
 
-    # 4. Resumen
+    # 4. Summary
     print(f"\n{'='*50}")
-    print(f"✅ Resultado guardado en: {output_path}")
-    print_summary(resultados)
+    print(f"✅ Results saved to: {output_path}")
+    print_summary(results)
 
 
-def export_results(resultados: list[dict], output_path: Path):
-    """Exporta los resultados a CSV."""
+def export_results(results: list[dict], output_path: Path):
+    """Exports results to CSV."""
     import csv
-    
+
     fieldnames = [
-        "Fecha", "Descripción", "Importe", "Divisa",
-        "Categoría", "Cuenta_Origen", "Confianza", "Tipo"
+        "Date", "Description", "Amount", "Currency",
+        "Category", "Source_Account", "Confidence", "Type"
     ]
-    
+
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        for r in resultados:
+        for r in results:
             writer.writerow({
-                "Fecha": r.get("fecha", ""),
-                "Descripción": r.get("descripcion", ""),
-                "Importe": r.get("importe", ""),
-                "Divisa": r.get("divisa", "EUR"),
-                "Categoría": r.get("categoria", "Sin categorizar"),
-                "Cuenta_Origen": r.get("cuenta_origen", "Actual"),
-                "Confianza": r.get("confianza", ""),
-                "Tipo": r.get("tipo", ""),
+                "Date": r.get("date", ""),
+                "Description": r.get("description", ""),
+                "Amount": r.get("amount", ""),
+                "Currency": r.get("currency", "EUR"),
+                "Category": r.get("category", "Uncategorized"),
+                "Source_Account": r.get("source_account", "Actual"),
+                "Confidence": r.get("confidence", ""),
+                "Type": r.get("type", ""),
             })
 
 
-def print_summary(resultados: list[dict]):
-    """Imprime resumen de gastos por categoría."""
+def print_summary(results: list[dict]):
+    """Prints expense summary by category."""
     from collections import defaultdict
-    
-    por_categoria = defaultdict(float)
-    for r in resultados:
-        if r.get("importe", 0) < 0:  # Solo gastos
-            cat = r.get("categoria", "Sin categorizar")
-            por_categoria[cat] += abs(r["importe"])
-    
-    print("\n📊 Resumen de gastos:")
-    for cat, total in sorted(por_categoria.items(), key=lambda x: -x[1]):
+
+    by_category = defaultdict(float)
+    for r in results:
+        if r.get("amount", 0) < 0:  # Expenses only
+            cat = r.get("category", "Uncategorized")
+            by_category[cat] += abs(r["amount"])
+
+    print("\n📊 Expense summary:")
+    for cat, total in sorted(by_category.items(), key=lambda x: -x[1]):
         print(f"  {cat:<30} {total:>8.2f} EUR")
-    
-    total_gastos = sum(v for v in por_categoria.values())
-    total_ingresos = sum(r["importe"] for r in resultados if r.get("importe", 0) > 0)
-    print(f"\n  {'Total gastos':<30} {total_gastos:>8.2f} EUR")
-    print(f"  {'Total ingresos':<30} {total_ingresos:>8.2f} EUR")
-    print(f"  {'Balance':<30} {total_ingresos - total_gastos:>8.2f} EUR")
+
+    total_expenses = sum(v for v in by_category.values())
+    total_income = sum(r["amount"] for r in results if r.get("amount", 0) > 0)
+    print(f"\n  {'Total expenses':<30} {total_expenses:>8.2f} EUR")
+    print(f"  {'Total income':<30} {total_income:>8.2f} EUR")
+    print(f"  {'Balance':<30} {total_income - total_expenses:>8.2f} EUR")
 
 
 if __name__ == "__main__":
