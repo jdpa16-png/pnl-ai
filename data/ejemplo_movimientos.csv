@@ -1,0 +1,11 @@
+Tipo,Producto,Fecha de inicio,Fecha de finalización,Descripción,Importe,Comisión,Divisa,State,Saldo
+Transferir,Actual,2026-02-01 13:14:05,2026-02-01 13:14:06,Bizum payment to: Mayeli A.M.,-144.00,0.00,EUR,COMPLETADO,1543.46
+Pago con tarjeta,Actual,2026-01-31 20:35:31,2026-02-01 13:14:35,Carrefour Express,-15.39,0.00,EUR,COMPLETADO,1528.07
+Pago con tarjeta,Actual,2026-01-30 09:12:00,2026-01-30 09:12:01,Netflix,-15.99,0.00,EUR,COMPLETADO,1512.08
+Pago con tarjeta,Actual,2026-01-29 21:45:00,2026-01-29 21:45:01,Glovo Madrid,-22.50,0.00,EUR,COMPLETADO,1489.58
+Transferir,Actual,2026-01-28 10:00:00,2026-01-28 10:00:01,Nómina enero 2026,2500.00,0.00,EUR,COMPLETADO,3989.58
+Pago con tarjeta,Actual,2026-01-27 14:30:00,2026-01-27 14:30:01,Farmacia San Pablo,-18.40,0.00,EUR,COMPLETADO,1971.18
+Pago con tarjeta,Actual,2026-01-26 11:00:00,2026-01-26 11:00:01,Spotify,-9.99,0.00,EUR,COMPLETADO,1952.78
+Pago con tarjeta,Actual,2026-01-25 20:00:00,2026-01-25 20:00:01,Restaurante La Tasca,-45.00,0.00,EUR,COMPLETADO,1907.78
+Pago con tarjeta,Actual,2026-01-24 08:30:00,2026-01-24 08:30:01,Cabify,-12.30,0.00,EUR,COMPLETADO,1895.48
+Pago con tarjeta,Actual,2026-01-23 17:00:00,2026-01-23 17:00:01,Amazon Prime,-4.99,0.00,EUR,COMPLETADO,1890.49
