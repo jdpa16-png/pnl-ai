@@ -1,81 +1,78 @@
-# 💰 Categorizador de Gastos IA
+# 💰 AI Expense Categorizer
 
-Herramienta CLI en Python que lee exportaciones bancarias (CSV) y las categoriza automáticamente usando Claude AI.
+Python CLI tool that reads bank CSV exports and automatically categorizes them using Claude AI.
 
-## Instalación rápida
+## Quick setup
 
 ```bash
-# 1. Clonar / descomprimir el proyecto
-cd gastos-ia
+# 1. Clone / unzip the project
+cd pnl-ai
 
-# 2. Crear entorno virtual
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# 2. Create virtual environment
+python3 -m venv env
+source env/bin/activate  # Windows: env\Scripts\activate
 
-# 3. Instalar dependencias
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Configurar API Key
+# 4. Configure API key
 cp .env.example .env
-# Editar .env y poner tu ANTHROPIC_API_KEY
-# (obtener en https://console.anthropic.com)
-
-# 5. Cargar variables de entorno
-export $(cat .env | xargs)  # O usar python-dotenv
+# Edit .env and set your ANTHROPIC_API_KEY
+# (get one at https://console.anthropic.com)
 ```
 
-## Uso
+## Usage
 
 ```bash
-# Modo interactivo (pregunta cuando tiene dudas)
-python main.py data/ejemplo_movimientos.csv
+# Interactive mode (asks when uncertain)
+python main.py data/example_transactions.csv
 
-# Modo automático (sin preguntas, usa mejor estimación)
-python main.py data/mis_movimientos.csv --auto
+# Automatic mode (no prompts, uses best estimate)
+python main.py data/transactions.csv --auto
 
-# Especificar archivo de salida
-python main.py data/movimientos_enero.csv -o resultados_enero.csv
+# Specify output file
+python main.py data/january.csv -o january_results.csv
 ```
 
-## Funcionamiento
+## How it works
 
 ```
-CSV banco → Leer → Categorizar → Exportar CSV listo para Google Sheets
+Bank CSV → Read → Categorize → Export CSV ready for Google Sheets
                       │
-                      ├── 1. Buscar en historial (sin API)
-                      ├── 2. Keywords obvias (sin API)
+                      ├── 1. Check history (no API)
+                      ├── 2. Obvious keywords (no API)
                       ├── 3. Claude AI
-                      └── 4. Preguntar usuario si hay duda
+                      └── 4. Ask user if uncertain
 ```
 
-El historial se guarda en `data/historial.json`. Con el tiempo, el sistema aprende tus patrones y necesita llamar menos a la API.
+History is saved to `data/history.json`. Over time, the system learns your patterns and needs fewer API calls.
 
-## Personalización
+## Customization
 
-Edita `categories.py` para:
-- Ajustar tus categorías de gasto/ingreso
-- Añadir tus cuentas bancarias
-- Añadir keywords para clasificación rápida
+Edit `categories.py` to:
+- Adjust your expense/income categories
+- Add your bank accounts
+- Add keywords for fast classification
 
 ## Roadmap
 
-- [x] **Fase 1** — CLI local: CSV → categorización → export
-- [ ] **Fase 2** — Google Sheets: subir resultados automáticamente
-- [ ] **Fase 3** — Revolut API: obtener movimientos en tiempo real
-- [ ] **Fase 4** — Telegram Bot: validar dudas por mensaje
-- [ ] **Fase 5** — Dashboard: visualización de gastos
+- [x] **Phase 1** — Local CLI: CSV → categorization → export
+- [ ] **Phase 2** — Google Sheets: upload results automatically
+- [ ] **Phase 3** — Revolut API: fetch transactions in real time
+- [ ] **Phase 4** — Telegram Bot: validate uncertain entries via message
+- [ ] **Phase 5** — Dashboard: expense visualization
 
-## Estructura
+## Structure
 
 ```
-gastos-ia/
-├── main.py           # Punto de entrada CLI
-├── classifier.py     # Lógica de categorización con Claude
-├── csv_reader.py     # Parser del CSV bancario
-├── categories.py     # Tus categorías (personalizar aquí)
+pnl-ai/
+├── main.py           # CLI entry point
+├── classifier.py     # Categorization logic with Claude
+├── csv_reader.py     # Bank CSV parser
+├── categories.py     # Your categories (customize here)
 ├── requirements.txt
-├── .env.example      # Plantilla de variables de entorno
+├── .env.example      # Environment variables template
 └── data/
-    ├── ejemplo_movimientos.csv   # CSV de prueba
-    └── historial.json            # Se crea automáticamente
+    ├── example_transactions.csv   # Sample CSV
+    └── history.json               # Auto-created
 ```
