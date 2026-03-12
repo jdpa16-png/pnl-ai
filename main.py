@@ -4,14 +4,18 @@ AI Expense Categorizer - Phase 1
 Reads a bank CSV, categorizes automatically, and exports the result.
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from csv_reader import read_bank_csv
 from classifier import ExpenseClassifier
-from categories import CATEGORIES, ASSET_ACCOUNTS
-
+from categories import ACCOUNTS_PLAN, COSTS_PLAN
 
 def main():
     parser = argparse.ArgumentParser(description="AI Expense Categorizer")
@@ -28,7 +32,15 @@ def main():
         "--auto", action="store_true",
         help="Automatic mode: never ask, always use best estimate"
     )
+    parser.add_argument(
+        "--account", "-a",
+        help="Asset account code for this CSV (e.g. 211 for 'Cuenta principal Jaime')"
+    )
     args = parser.parse_args()
+
+    if args.account and args.account not in ACCOUNTS_PLAN:
+        print(f"⚠️  Warning: account code '{args.account}' not found in ACCOUNTS_PLAN")
+        print("   Available codes:", ", ".join(k for k in ACCOUNTS_PLAN if len(k) == 3))
 
     csv_path = Path(args.csv_file)
     if not csv_path.exists():
@@ -53,7 +65,7 @@ def main():
 
     # 3. Export
     output_path = Path(args.output)
-    export_results(results, output_path)
+    export_results(results, output_path, account_code=args.account)
 
     # 4. Summary
     print(f"\n{'='*50}")
@@ -61,29 +73,49 @@ def main():
     print_summary(results)
 
 
-def export_results(results: list[dict], output_path: Path):
-    """Exports results to CSV."""
+def export_results(results: list[dict], output_path: Path, account_code: str | None = None):
+    """
+    Exports results to CSV using double-entry bookkeeping: 2 rows per transaction.
+
+    For expenses (amount < 0):
+      Row 1 (FROM asset):    asset_code, asset_description, date, desc, -abs(amount)
+      Row 2 (TO category):   category,   category,          date, desc, +abs(amount)
+
+    For income (amount > 0):
+      Row 1 (FROM category): category,   category,          date, desc, -amount
+      Row 2 (TO asset):      asset_code, asset_description, date, desc, +amount
+    """
     import csv
 
-    fieldnames = [
-        "Date", "Description", "Amount", "Currency",
-        "Category", "Source_Account", "Confidence", "Type"
-    ]
+    asset_code = account_code or "???"
+    asset_description = ACCOUNTS_PLAN.get(asset_code, asset_code)
+
+    fieldnames = ["code", "description", "date", "movement_description", "amount"]
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for r in results:
-            writer.writerow({
-                "Date": r.get("date", ""),
-                "Description": r.get("description", ""),
-                "Amount": r.get("amount", ""),
-                "Currency": r.get("currency", "EUR"),
-                "Category": r.get("category", "Uncategorized"),
-                "Source_Account": r.get("source_account", "Actual"),
-                "Confidence": r.get("confidence", ""),
-                "Type": r.get("type", ""),
-            })
+            amount: float = r.get("amount", 0.0)
+            date: str = r.get("date", "")
+            desc: str = r.get("description", "")
+            category: str = r.get("category", "Uncategorized")
+            abs_amount = abs(amount)
+
+            category_desc = COSTS_PLAN.get(category, category)
+
+            if amount < 0:
+                # Expense: money leaves asset → goes to cost category
+                writer.writerow({"code": asset_code, "description": asset_description,
+                                 "date": date, "movement_description": desc, "amount": -abs_amount})
+                writer.writerow({"code": category, "description": category_desc,
+                                 "date": date, "movement_description": desc, "amount": abs_amount})
+            else:
+                # Income: money comes from income category → enters asset
+                writer.writerow({"code": category, "description": category_desc,
+                                 "date": date, "movement_description": desc, "amount": -amount})
+                writer.writerow({"code": asset_code, "description": asset_description,
+                                 "date": date, "movement_description": desc, "amount": amount})
 
 
 def print_summary(results: list[dict]):

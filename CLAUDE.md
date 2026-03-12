@@ -20,6 +20,8 @@ pnl-ai/
 ├── categories.py        # Categories and keywords — user customizes here
 ├── requirements.txt
 ├── .env                 # API keys (never commit to git)
+├── docs/
+│   └── architecture.md  # Pipeline, export format, module map, CLI flags
 └── data/
     ├── history.json     # Memory of previous categorizations (auto-created)
     └── *.csv            # Bank CSV files
@@ -33,21 +35,8 @@ pnl-ai/
 - f-strings for all string formatting (no `.format()` or `%`)
 - Imports ordered: stdlib → third-party → local
 
-## Architecture — how classification works
-```
-CSV → csv_reader.py → list of transactions (dicts)
-                              ↓
-                      classifier.py
-                        1. exact history match  (no API)
-                        2. keyword match        (no API)
-                        3. Claude API           (with API)
-                        4. ask user             (if low confidence)
-                              ↓
-                      main.py → export CSV + summary
-```
-- `history.json` is the persistent memory across runs
-- Only saved to history if `confidence == "high"`
-- Model to use is always `claude-sonnet-4-20250514`
+## Architecture
+See [`docs/architecture.md`](docs/architecture.md) for the full classification pipeline, export format (double-entry bookkeeping), module responsibilities, and CLI flags.
 
 ## Required environment variables
 ```
@@ -79,8 +68,14 @@ TELEGRAM_CHAT_ID=...           # Phase 4
 # Test the full flow
 python main.py data/example_transactions.csv
 
+# Specify asset account and output file
+python main.py data/transactions.csv --account 221 --output out.csv
+
 # Automatic mode without interactive prompts
 python main.py data/transactions.csv --auto
+
+# Use a custom history file
+python main.py data/transactions.csv --history data/my_history.json
 
 # Run tests
 pytest tests/ -v

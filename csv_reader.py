@@ -4,6 +4,7 @@ Supports the Revolut/Actual format with columns:
 Type, Product, Started Date, Completed Date,
 Description, Amount, Fee, Currency, State, Balance
 """
+from __future__ import annotations
 
 import csv
 from pathlib import Path

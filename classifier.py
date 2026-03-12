@@ -4,6 +4,7 @@ Expense classifier using Claude API.
 - Applies keywords for obvious cases (no API cost)
 - Asks interactively when confidence is low
 """
+from __future__ import annotations
 
 import json
 import os
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import anthropic
 
-from categories import CATEGORIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, KEYWORD_HINTS
+from categories import ACCOUNTS_PLAN, ASSET_ACCOUNTS, CATEGORIES, COSTS_PLAN, KEYWORD_HINTS
 
 
 # Confidence threshold for asking the user (0-1)
@@ -41,7 +42,8 @@ class ExpenseClassifier:
             results.append({**tx, **result})
 
             confidence_emoji = "✅" if result["confidence"] == "high" else "🟡" if result["confidence"] == "medium" else "❓"
-            print(f"{confidence_emoji} {result['category']}")
+            source_label = {"history": "hist", "keyword": "kw", "ai": "ai", "user": "user", "error": "err"}.get(result.get("source", ""), "?")
+            print(f"{confidence_emoji} [{source_label}|{result['confidence']}] {result['category']}")
 
         # Save updated history
         self._save_history()
@@ -98,8 +100,12 @@ class ExpenseClassifier:
     def _classify_with_ai(self, tx: dict) -> dict:
         """Calls Claude to categorize the transaction."""
 
-        categories_str = "\n".join(f"- {c}" for c in CATEGORIES)
-        accounts_str = "Actual, Revolut, Cash, Savings"
+        categories_str = "\n".join(
+            f"  {code}: {COSTS_PLAN[code]}" for code in CATEGORIES
+        )
+        accounts_str = "\n".join(
+            f"  [{k}] {v}" for k, v in ACCOUNTS_PLAN.items() if len(k) == 3
+        )
 
         # Recent history context so Claude learns your patterns
         history_examples = self._get_history_examples(10)
@@ -117,10 +123,10 @@ TRANSACTION TO CATEGORIZE:
 - Operation type: {tx.get('type', 'unknown')}
 - Date: {tx.get('date', '')}
 
-AVAILABLE CATEGORIES:
+AVAILABLE CATEGORIES (reply with the code only, e.g. "441"):
 {categories_str}
 
-AVAILABLE ASSET ACCOUNTS:
+AVAILABLE ASSET ACCOUNTS (code + name):
 {accounts_str}
 {history_str}
 
@@ -152,9 +158,9 @@ Rules:
 
             data = json.loads(response_text)
 
-            # Validate category exists
-            if data.get("category") not in CATEGORIES:
-                data["category"] = "Uncategorized"
+            # Validate category code exists
+            if data.get("category") not in COSTS_PLAN:
+                data["category"] = "OTR"
                 data["confidence"] = "low"
 
             return {
@@ -186,10 +192,11 @@ Rules:
             print(f"  │  Reason: {ai_result['reason']}")
         print(f"  └─ Options:")
 
-        # Show numbered categories
-        for i, cat in enumerate(CATEGORIES, 1):
-            marker = "👉" if cat == ai_result["category"] else "  "
-            print(f"     {marker} {i:2}. {cat}")
+        # Show numbered categories with code and description
+        for i, code in enumerate(CATEGORIES, 1):
+            desc = COSTS_PLAN.get(code, code)
+            marker = "👉" if code == ai_result["category"] else "  "
+            print(f"     {marker} {i:2}. {code}: {desc}")
 
         print(f"\n  Press ENTER to accept '{ai_result['category']}'")
         print(f"  Or type the category number: ", end="")
