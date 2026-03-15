@@ -22,6 +22,8 @@ build/
 # Data / runtime files
 data/history.json
 data/*.csv
+data/categorized_transactions.csv
+data/credentials.json
 
 # OS
 .DS_Store

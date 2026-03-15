@@ -1,91 +1,120 @@
-# AI Expense Categorizer — Project Rules
+# PnL AI — Project Rules
 
 ## What this project is
-Python tool that reads CSV exports from banks (Revolut / Actual)
-and automatically categorizes them using the Claude API. The user validates
-uncertain entries interactively (CLI today, Telegram in the future).
+Personal finance app that categorizes bank transactions using the Claude API.
+Started as a CLI tool; now a full web app with React frontend, FastAPI backend,
+Google Sheets export, and planned live Revolut integration.
 
 ## Current stack
-- Python 3.11+ with strict type hints
-- `anthropic` SDK for Claude API calls
-- `python-dotenv` for environment variables
-- No web frameworks — pure CLI in this phase
+- **Backend**: Python 3.11+, FastAPI, WebSockets, uvicorn[standard]
+- **Frontend**: React 18 + Vite + TypeScript, Tailwind CSS v4, Recharts, React Router
+- **AI**: `anthropic` SDK — model `claude-sonnet-4-20250514`
+- **Sheets**: `gspread` + Google service account
+- **Config**: `python-dotenv`
 
-## File structure
+## Actual file structure
 ```
 pnl-ai/
-├── main.py              # CLI entry point and final summary
-├── classifier.py        # AI logic: history → keywords → Claude API → user
-├── csv_reader.py        # Bank CSV parser (auto-detects delimiter)
-├── categories.py        # Categories and keywords — user customizes here
+├── backend/
+│   ├── __init__.py
+│   ├── api.py           # FastAPI app: all REST routes + WebSocket endpoint
+│   └── ws_manager.py    # Per-session WebSocket registry + async/sync bridge
+├── frontend/
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── Upload.tsx     # Page 1: CSV drop, account selector, live log, question cards
+│   │   │   ├── Dashboard.tsx  # Page 2: charts, table, inline category editing, Sheets upload
+│   │   │   └── History.tsx    # Page 3: view/edit/delete history.json entries
+│   │   ├── accounts.ts        # ACCOUNT_OPTIONS list + SHEETS_URL constant
+│   │   ├── types.ts           # Shared TS types (Transaction, WsMessage, etc.)
+│   │   └── App.tsx            # React Router (/, /dashboard, /history)
+│   ├── vite.config.ts         # Tailwind plugin + /api proxy to :8000
+│   └── package.json
+├── main.py              # CLI entry point — still fully functional
+├── classifier.py        # Core: history → keywords → Claude → ask (ask_fn + on_progress callbacks)
+├── csv_reader.py        # Bank CSV parser, auto-detects delimiter + column names (ES/EN)
+├── categories.py        # COSTS_PLAN, ACCOUNTS_PLAN, KEYWORD_HINTS — USER TERRITORY
+├── gsheets.py           # Google Sheets uploader (double-entry rows → DIARIO AUTO)
 ├── requirements.txt
-├── .env                 # API keys (never commit to git)
+├── .env                 # Never commit
 ├── docs/
-│   └── architecture.md  # Pipeline, export format, module map, CLI flags
+│   └── architecture.md
 └── data/
-    ├── history.json     # Memory of previous categorizations (auto-created)
-    └── *.csv            # Bank CSV files
+    ├── history.json         # Auto-created learned classifications
+    ├── credentials.json     # Google service account — never commit
+    └── *.csv
 ```
 
 ## Code conventions
 - **Type hints** on all functions, no exceptions
 - **Docstrings in English** for public classes and functions
 - **snake_case** for variables and functions, **PascalCase** for classes
-- Max ~150 lines per file — if it grows, extract a module
-- f-strings for all string formatting (no `.format()` or `%`)
+- Max ~150 lines per file — extract modules when growing
+- f-strings for all string formatting
 - Imports ordered: stdlib → third-party → local
-
-## Architecture
-See [`docs/architecture.md`](docs/architecture.md) for the full classification pipeline, export format (double-entry bookkeeping), module responsibilities, and CLI flags.
 
 ## Required environment variables
 ```
-ANTHROPIC_API_KEY=...          # Required now
-GOOGLE_SHEETS_ID=...           # Phase 2
-GOOGLE_CREDENTIALS_PATH=...    # Phase 2
-REVOLUT_CLIENT_ID=...          # Phase 3
-TELEGRAM_BOT_TOKEN=...         # Phase 4
-TELEGRAM_CHAT_ID=...           # Phase 4
+ANTHROPIC_API_KEY=...          # Required — Claude API
+GOOGLE_SHEETS_ID=...           # Phase 2 — spreadsheet ID
+GOOGLE_CREDENTIALS_PATH=...    # Phase 2 — service account JSON path
+REVOLUT_WEBHOOK_SECRET=...     # Phase 4 — webhook HMAC secret
+REVOLUT_API_KEY=...            # Phase 4 — Revolut Business API key
 ```
 
-## Roadmap (implement in order)
-1. ✅ **Phase 1** — CLI: CSV → categorize → export CSV
-2. ⬜ **Phase 2** — `gsheets.py`: upload results to Google Sheets automatically
-3. ⬜ **Phase 3** — `revolut.py`: fetch transactions in real time via API
-4. ⬜ **Phase 4** — `telegram_bot.py`: validate uncertain entries via inline button messages
-5. ⬜ **Phase 5** — Dashboard: expense visualization from Sheets
+## Roadmap
+1. ✅ **Phase 1** — CLI: CSV → classify → export CSV
+2. ✅ **Phase 2** — `gsheets.py`: double-entry upload to Google Sheets
+3. ✅ **Phase 3** — Web App (FastAPI + React):
+   - Upload page: CSV drag & drop, account selector, live terminal log
+   - Interactive classification via WebSocket (question cards replace CLI prompts)
+   - Dashboard: bar chart, category table, summary cards, inline category editing
+   - History page: view, edit, delete `history.json` entries
+4. ⬜ **Phase 4** — Live Revolut:
+   - `backend/revolut.py`: receive HMAC-verified webhooks
+   - Classify in real time using same pipeline
+   - Push new transactions to all connected browsers via WebSocket
+   - Auto-append to Google Sheets
 
 ## Do NOT do this
-- No hardcoded API keys in code — always from `.env`
-- No Claude API calls if history or keywords already have the answer
-- No saving to history for low or medium confidence categorizations
+- No hardcoded API keys — always from `.env`
+- No Claude API calls if history or keywords already answer the question
+- No saving to history for low or medium confidence (only `high`)
 - No files over ~150 lines — extract modules
 - No changing the model (`claude-sonnet-4-20250514`) without flagging it
 - No auto-modifying `categories.py` — that's user territory
+- No Streamlit — can't handle Revolut webhooks or real WebSockets
 
 ## Useful commands
 ```bash
-# Test the full flow
-python main.py data/example_transactions.csv
+# ── Backend ───────────────────────────────────────────────────────────────────
+source .pnlai/bin/activate
+uvicorn backend.api:app --reload --port 8000
 
-# Specify asset account and output file
-python main.py data/transactions.csv --account 221 --output out.csv
+# ── Frontend ──────────────────────────────────────────────────────────────────
+cd frontend && npm run dev       # http://localhost:5173
 
-# Automatic mode without interactive prompts
-python main.py data/transactions.csv --auto
+# ── CLI (still works) ─────────────────────────────────────────────────────────
+python main.py data/gastos-marzo.csv --account 211
+python main.py data/gastos-marzo.csv --account 211 --sheets --auto
 
-# Use a custom history file
-python main.py data/transactions.csv --history data/my_history.json
-
-# Run tests
-pytest tests/ -v
-
-# Inspect the history file
-cat data/history.json | python -m json.tool
+# ── Install ───────────────────────────────────────────────────────────────────
+pip install -r requirements.txt
+cd frontend && npm install
 ```
 
-## When adding a new phase
-1. Create the new module (e.g. `gsheets.py`) with isolated logic
-2. Integrate it in `main.py` with an optional CLI flag (e.g. `--sheets`)
-3. Add required environment variables to `.env.example`
-4. Update this CLAUDE.md with the new commands and variables
+## Key design decisions
+- **WebSocket async/sync bridge**: `classifier.py` runs in a thread (`asyncio.to_thread`).
+  When uncertain, `sync_ask()` in `api.py` calls `run_coroutine_threadsafe()` to push
+  the question to the browser and block the thread until an answer arrives via the WS.
+- **CLI stays sync**: `classifier.py` uses `ask_fn` callback — `None` → uses `input()`,
+  provided → bridges to WebSocket. CLI needs no changes.
+- **History is only written for `confidence == "high"`** to avoid learning from mistakes.
+
+## When adding Phase 4
+1. Create `backend/revolut.py` with webhook receiver (HMAC verify → parse → classify)
+2. Add `POST /webhook/revolut` route in `api.py`
+3. Reuse `ws_manager` to push live transactions to all connected clients
+4. Add a live feed section to `Dashboard.tsx`
+5. Add `REVOLUT_WEBHOOK_SECRET` and `REVOLUT_API_KEY` to `.env`
+6. Update this file and `docs/architecture.md`

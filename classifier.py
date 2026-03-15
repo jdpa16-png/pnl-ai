@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import anthropic
@@ -20,8 +21,20 @@ CONFIDENCE_THRESHOLD = 0.75
 
 
 class ExpenseClassifier:
-    def __init__(self, history_path: str = "data/history.json", interactive: bool = True):
+    def __init__(
+        self,
+        history_path: str = "data/history.json",
+        interactive: bool = True,
+        ask_fn: "Callable[[dict, dict], str] | None" = None,
+    ):
+        """
+        Args:
+            ask_fn: Optional callback for web mode. Signature: (tx, ai_result) -> category_code.
+                    When set, replaces the CLI input() prompt. Must be a blocking (sync) callable
+                    that internally bridges to the async WebSocket layer.
+        """
         self.interactive = interactive
+        self.ask_fn = ask_fn
         self.history_path = Path(history_path)
         self.history = self._load_history()
         self.client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -30,8 +43,19 @@ class ExpenseClassifier:
     # MAIN CLASSIFICATION
     # ──────────────────────────────────────────────────────────────────────────
 
-    def classify_batch(self, transactions: list[dict]) -> list[dict]:
-        """Classifies a list of transactions."""
+    def classify_batch(
+        self,
+        transactions: list[dict],
+        on_progress: "Callable[[int, int, dict, dict], None] | None" = None,
+    ) -> list[dict]:
+        """
+        Classifies a list of transactions.
+
+        Args:
+            on_progress: Optional callback called after each transaction.
+                         Signature: (index, total, tx, result) -> None.
+                         Used by web mode to push progress via WebSocket.
+        """
         results = []
         total = len(transactions)
 
@@ -39,11 +63,15 @@ class ExpenseClassifier:
             print(f"[{i+1}/{total}] {tx['date']} | {tx['description'][:45]:<45} | {tx['amount']:>9.2f} €", end="  ")
 
             result = self.classify_one(tx)
-            results.append({**tx, **result})
+            merged = {**tx, **result}
+            results.append(merged)
 
             confidence_emoji = "✅" if result["confidence"] == "high" else "🟡" if result["confidence"] == "medium" else "❓"
             source_label = {"history": "hist", "keyword": "kw", "ai": "ai", "user": "user", "error": "err"}.get(result.get("source", ""), "?")
             print(f"{confidence_emoji} [{source_label}|{result['confidence']}] {result['category']}")
+
+            if on_progress:
+                on_progress(i + 1, total, tx, result)
 
         # Save updated history
         self._save_history()
@@ -185,14 +213,26 @@ Rules:
     # ──────────────────────────────────────────────────────────────────────────
 
     def _ask_user(self, tx: dict, ai_result: dict) -> dict:
-        """Asks the user when the AI is uncertain."""
+        """
+        Asks the user when the AI is uncertain.
+        In web mode (ask_fn set): calls ask_fn which blocks until frontend responds.
+        In CLI mode: uses input() as before.
+        """
+        if self.ask_fn:
+            # Web mode: delegate to the async bridge (blocking from this thread's perspective)
+            chosen = self.ask_fn(tx, ai_result)
+            ai_result["category"] = chosen
+            ai_result["confidence"] = "high"
+            ai_result["source"] = "user"
+            return ai_result
+
+        # CLI mode (original behaviour)
         print(f"\n  ┌─ 🤔 Unsure about: '{tx['description']}' ({tx['amount']} €)")
         print(f"  │  AI suggests: '{ai_result['category']}' (confidence: {ai_result['confidence']})")
         if ai_result.get("reason"):
             print(f"  │  Reason: {ai_result['reason']}")
         print(f"  └─ Options:")
 
-        # Show numbered categories with code and description
         for i, code in enumerate(CATEGORIES, 1):
             desc = COSTS_PLAN.get(code, code)
             marker = "👉" if code == ai_result["category"] else "  "
@@ -205,8 +245,7 @@ Rules:
             user_input = input().strip()
 
             if not user_input:
-                # Accept AI suggestion
-                ai_result["confidence"] = "high"  # User validated
+                ai_result["confidence"] = "high"
                 return ai_result
 
             idx = int(user_input) - 1
@@ -218,7 +257,7 @@ Rules:
                 print("  ⚠️  Invalid number, using AI suggestion")
 
         except (ValueError, EOFError):
-            pass  # Keep AI result
+            pass
 
         return ai_result
 

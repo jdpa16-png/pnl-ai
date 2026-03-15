@@ -17,12 +17,14 @@ from csv_reader import read_bank_csv
 from classifier import ExpenseClassifier
 from categories import ACCOUNTS_PLAN, COSTS_PLAN
 
+SHEET_NAME_DISPLAY = "DIARIO AUTO"
+
 def main():
     parser = argparse.ArgumentParser(description="AI Expense Categorizer")
     parser.add_argument("csv_file", help="Path to the bank-exported CSV")
     parser.add_argument(
-        "--output", "-o", default="categorized_transactions.csv",
-        help="Output file (default: categorized_transactions.csv)"
+        "--output", "-o", default="data/categorized_transactions.csv",
+        help="Output file (default: data/categorized_transactions.csv)"
     )
     parser.add_argument(
         "--history", default="data/history.json",
@@ -35,6 +37,10 @@ def main():
     parser.add_argument(
         "--account", "-a",
         help="Asset account code for this CSV (e.g. 211 for 'Cuenta principal Jaime')"
+    )
+    parser.add_argument(
+        "--sheets", action="store_true",
+        help="Upload results to Google Sheets (DIARIO AUTO)"
     )
     args = parser.parse_args()
 
@@ -67,7 +73,17 @@ def main():
     output_path = Path(args.output)
     export_results(results, output_path, account_code=args.account)
 
-    # 4. Summary
+    # 4. Upload to Sheets (optional)
+    if args.sheets:
+        print("\n📤 Uploading to Google Sheets...")
+        try:
+            from gsheets import upload_to_sheets
+            rows_added = upload_to_sheets(results, account_code=args.account)
+            print(f"✅ {rows_added} rows appended to '{SHEET_NAME_DISPLAY}'")
+        except Exception as e:
+            print(f"❌ Google Sheets upload failed: {e}")
+
+    # 5. Summary
     print(f"\n{'='*50}")
     print(f"✅ Results saved to: {output_path}")
     print_summary(results)
